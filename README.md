@@ -110,13 +110,13 @@ Below is a list of completed milestones for this project:
 * Milestone: Frontend and Backend Validation
 * Milestone: Responsive UI and Styling
 * Milestone: Flask Login Integration and Security
+* Milestone: Persistent User Notification System
 
 ## Important Links
 
-* Project Document: https://drive.google.com/file/d/1UltoAiVG7UsqcJPSz4c1RIj31uC0A03q/view?usp=sharing
-* ER Diagram for Database model: https://drive.google.com/file/d/1q17xsiqooNimRmzT8n1Ywd3BV4xMtKmG/view?usp=drive_link
-* Project Demostration Submitted Video: https://drive.google.com/file/d/18jml87WlPq9V6mubJ9h4Yun0j1DVll2K/view?usp=drive_link
-* Project Full Video: https://drive.google.com/file/d/1JFYJtCl-YCzLhfoA6iU54HnMSuT-NlCI/view?usp=drive_link
+* Project Document: https://drive.google.com/file/d/1ITJMjlUXqFmRsfdUG01XgcTYtPFdYQV1/view?usp=sharing
+* ER Diagram for Database model: https://drive.google.com/file/d/1qj3zjXXeYz34Xhmb28jjNe1-7p5vgZsi/view?usp=sharing
+* Project Demostration Video: https://drive.google.com/file/d/1fvCD8g0ysJ_ebdIGmdNOivHzyuYIzCYZ/view?usp=sharing
 
 ## Screenshots
 
