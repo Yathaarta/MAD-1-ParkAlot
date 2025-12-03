@@ -1,6 +1,6 @@
     <!-- Navbar -->
     <nav class="navbar custom-navbar">
-        <div class="container-fluid d-flex justify-content-between align-items-center">
+        <!-- <div class="container-fluid d-flex justify-content-between align-items-center"> -->
 
             <!-- left group: hamburger + logo -->
             <div class="d-flex align-items-center">
@@ -16,17 +16,18 @@
             </div>
 
             <!-- right group: login and signup buttons -->
-            <div class="d-flex gap-2">
+            <div class="d-none d-lg-block">
                 <a href="{{url_for('login')}}" class="btn btn-success">User login</a>
                 <a href="{{ url_for('register') }}" class="btn btn-primary">Register</a>
             </div>
             
-            <div class="collapse navbar-collapse justify-content-end" id="navbarContent">
-                <div class="d-flex flex-row gap-3">
+            <div class="collapse navbar-collapse justify-content-center" id="navbarContent">
+                
                     <a class="btn btn-outline-secondary" href="{{ url_for('home') }}">Home</a>
                     <a class="btn btn-outline-secondary" href="{{ url_for('about') }}">About us</a>
                     <a class="btn btn-outline-secondary" href="{{ url_for('contact') }}">Contact us</a>
-                </div>
+                    <a href="{{url_for('login')}}" class="btn btn-success text-black d-lg-none mt-2">User login</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-primary text-black d-lg-none mt-2">Register</a>
             </div>
-        </div>
+        <!-- </div> -->
     </nav>

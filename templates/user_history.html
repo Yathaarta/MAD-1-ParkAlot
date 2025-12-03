@@ -8,13 +8,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/navbar2.css">
     <style>
-       
         .scrollable-history {
             max-height: 500px; 
-            overflow-y: auto;
+            overflow-y: auto; /* Vertical scroll */
+            overflow-x: auto; /* CRITICAL: Adds horizontal scroll for mobile */
+            
+            /* Optional: Border to make it look contained like admin tables */
+            border: 1px solid #ddd;
+            border-radius: 5px;
         }
+        
+        /* Scrollbar styling */
         .scrollable-history::-webkit-scrollbar {
             width: 6px;
+            height: 6px; /* Added height for horizontal scrollbar */
         }
         .scrollable-history::-webkit-scrollbar-thumb {
             background-color: #888;

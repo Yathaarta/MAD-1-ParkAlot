@@ -1,15 +1,20 @@
-from flask import render_template, request, redirect, url_for, flash, session
-from models.dbmodel import *
-from app import app
+# routes.py
+from flask import Flask, render_template, request, redirect, url_for, flash, session, get_flashed_messages
+from flask_sqlalchemy import SQLAlchemy
+from models.dbmodel import * 
+from app import app 
 from werkzeug.security import generate_password_hash, check_password_hash
 from slugify import slugify
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, or_ # import or_ for complex filters
 import json
+from functools import wraps 
 
+# import your decorators from the separate file
 from .decorators import login_required, admin_required, only_user, user_access_required
-app.permanent_session_lifetime = timedelta(minutes=10)   #set session lifetime to 10 minutes 
 
+
+app.permanent_session_lifetime = timedelta(minutes=10) # set session lifetime to 10 minutes
 
 # ---------------------------------------------PUBLIC ROUTES------------------------------------------------
 
@@ -51,6 +56,12 @@ def login():
 
     email = request.form.get('email')
     password = request.form.get('password')
+
+    if not email or not password:
+        flash("Please enter both email and password.", "warning")
+        return redirect(url_for('login'))
+
+
     user = User.query.filter_by(email_id=email).first()
 
     if not user:
@@ -61,11 +72,12 @@ def login():
         flash("Incorrect Password", "warning")
         return redirect(url_for('login'))
 
-    # Store user's session
+    # Store session
     session['user_id'] = user.user_id
     session['username'] = user.user_name
     session['is_admin'] = user.is_admin
     session.permanent = True
+
     flash("Login Successful", "success")
 
     if user.is_admin:
@@ -86,6 +98,10 @@ def register():
     email = request.form.get('email')
     password = request.form.get('password')
     cnf_password = request.form.get('confirm_password')
+
+    if not username or not email or not password or not cnf_password:
+        flash("All fields are required.", "warning")
+        return redirect(url_for('register'))
 
     if password != cnf_password:
         flash("Both passwords must match", "warning")
@@ -116,75 +132,30 @@ def logout():
 
 
 # -----------------------------
-# NEW HELPER FUNCTION:
-# To update spot statuses
+# HELPER FUNCTION:
+# To update spot statuses and store messages persistently
+# This function only stores notifications in the db. It does not flash them directly.
 # -----------------------------
 
 def update_spot_statuses_and_counts():
     """
-    for when admin sees update occupied/available for everybody's bookings that had gone activated or expiered
-    in current time"""
-
-    now = datetime.now()
-    
-    messages_to_flash = []  
-
-    # --- activating bookings  ---
-    bookings_to_activate = UserBookings.query.filter(
-        UserBookings.parking_time <= now,
-        UserBookings.leaving_time > now,
-        ParkingSpot.spot_id == UserBookings.spot_id,
-        ParkingSpot.status == 'A'
-    ).join(ParkingSpot).all()
-
-    for booking in bookings_to_activate:
-        if booking.spot:
-            booking.spot.status = 'O'
-        
-    # ---release booking on expiry---
-    bookings_to_expire = UserBookings.query.filter(
-        UserBookings.leaving_time <= now 
-    ).all()
-
-    for booking in bookings_to_expire:
-        # move expired booking to UserHistory
-        history = UserHistory(
-            user_id=booking.user_id,
-            spot_id=booking.spot_id,
-            booking_time=booking.parking_time,
-            leaving_time=booking.leaving_time,
-            parking_cost=booking.parking_cost,
-            vehicle_no=booking.vehicle_no
-        )
-        db.session.add(history)
-        
-        # freeing spot if was occupied
-        if booking.spot and booking.spot.status == 'O':
-            if booking.spot:
-                booking.spot.status = 'A'
-        
-        db.session.delete(booking)
-
-    # commit all changes in one go
-    if bookings_to_activate or bookings_to_expire:
-        db.session.commit()
-    
-    return messages_to_flash # return counts for flash messages
-
-def update_spot_statuses_for_user(user_id):
+    updates parking spot statuses and stores flash messages persistently
+    in the database for relevant users.
+    This function does not return messages for immediate flashing.
     """
-    this is specific for user if under his session any of his booking got live or expires we will update spot 
-    status for current user specifically only and then also give him a flash message the downside is here that if 
-    status updates happened under admin session or search_parking route that uses helper to update all of users 
-    booking based on booking time period this user will not get flash message"""
-
     now = datetime.now()
     
-    messages_to_flash = []  
+    # Helper to add a message to the database
+    def add_user_notification_to_db(user_id, category, message_text):
+        new_notification = UserNotification(
+            user_id=user_id,
+            message_category=category,
+            message_text=message_text
+        )
+        db.session.add(new_notification)
 
-    # --- activating bookings for current user in session only---
+    # --- activating bookings ---
     bookings_to_activate = UserBookings.query.filter(
-        UserBookings.user_id==user_id,
         UserBookings.parking_time <= now,
         UserBookings.leaving_time > now,
         ParkingSpot.spot_id == UserBookings.spot_id,
@@ -192,19 +163,24 @@ def update_spot_statuses_for_user(user_id):
     ).join(ParkingSpot).all()
 
     for booking in bookings_to_activate:
-        if booking.spot:
+        if booking.spot: 
             booking.spot.status = 'O'
+            add_user_notification_to_db(
+                booking.user_id,
+                "info",
+                f"Booked spot {booking.spot_id} is now active. Please proceed to your spot."
+            )
     
-    if len(bookings_to_activate) > 0:
-        messages_to_flash.append(("info", f"{len(bookings_to_activate)} of your bookings are now active. Please proceed to your spot."))
-    
-    # ---release booking on expiry---
+    # --- release booking on expiry ---
     bookings_to_expire = UserBookings.query.filter(
-        UserBookings.user_id==user_id,
         UserBookings.leaving_time <= now 
     ).all()
 
+    # collect user ids for which "expired" messages need to be generated *before* deleting bookings.
+    expired_user_ids = set()
     for booking in bookings_to_expire:
+        expired_user_ids.add(booking.user_id)
+
         # move expired booking to UserHistory
         history = UserHistory(
             user_id=booking.user_id,
@@ -222,14 +198,39 @@ def update_spot_statuses_for_user(user_id):
         
         db.session.delete(booking)
     
-    if len(bookings_to_expire) > 0:
-        messages_to_flash.append(("warning", f"{len(bookings_to_expire)} of your past bookings have expired and are moved to history. Please evacuate the parking spot if you haven't already."))
+    # adding a single "expired" message for each user who had bookings expire
+    for user_id in expired_user_ids:
+        add_user_notification_to_db(
+            user_id,
+            "warning",
+            "Some of your past bookings have expired and are moved to history. Please evacuate the parking spot if you haven't already."
+        )
 
     # commit all changes in one go
     if bookings_to_activate or bookings_to_expire:
         db.session.commit()
     
-    return messages_to_flash # return flash messages list
+
+
+# -----------------------------
+# HELPER FUNCTION:
+# To flash unread messages from the database for the current user
+# -----------------------------
+def flash_unread_user_notifications(user_id):
+    """
+    Flashes any unread notifications for the given user_id and marks them as read.
+    """
+    unread_notifications = UserNotification.query.filter_by(
+        user_id=user_id,
+        is_read=False
+    ).order_by(UserNotification.created_at.asc()).all()
+
+    for notification in unread_notifications:
+        flash(notification.message_text, notification.message_category)
+        notification.is_read = True # mark as read
+
+    if unread_notifications: # oOnly commit if there were notifications to mark as read
+        db.session.commit()
 
 
 # ---------------------------------------------USER ROUTES------------------------------------------------
@@ -238,18 +239,17 @@ def update_spot_statuses_for_user(user_id):
 # USER HOME 
 # -------------------------
 @app.route('/<int:user_id>-<slug>/home')
-@login_required          
-@user_access_required    
-@only_user               
+@login_required 
+@user_access_required 
+@only_user
 def user_home(user_id, slug, user): 
     cities = [row[0] for row in db.session.query(ParkingLot.city).distinct().all()]
 
-    now = datetime.now()  
-
-    # calling helper function if users spot freed/occupied right before this action
-    status_messages = update_spot_statuses_for_user(user_id)
-    for category, message in status_messages:
-        flash(message, category)
+    # call helper function to update statuses and store messages in DB
+    update_spot_statuses_and_counts() 
+    
+    # flash any unread messages for this user from the database
+    flash_unread_user_notifications(user.user_id)
     
     # fetch active bookings (after updates)
     active_bookings = UserBookings.query.filter_by(user_id=user.user_id).all()
@@ -258,39 +258,38 @@ def user_home(user_id, slug, user):
     recent_history = UserHistory.query.filter_by(user_id=user.user_id).order_by(UserHistory.id.desc()).limit(5).all()
 
     return render_template('user_home1.html', user=user, cities=cities,
-                           current_bookings=active_bookings, recent_history=recent_history, now=now)
+                           current_bookings=active_bookings, recent_history=recent_history, now=datetime.now())
 
-# ... (release_booking, profile, user_history, search_parking, book_spot) ...
 
 @app.route('/<int:user_id>-<slug>/release_booking/<int:booking_id>', methods=['POST'])
 @login_required
 @only_user
 @user_access_required
 def release_booking(user_id, slug, user, booking_id):
+    # calling global update to ensure all statuses are fresh and messages are stored in DB
+    update_spot_statuses_and_counts() 
+
+    # attempt to get the booking. It might be none if it was just expired and moved to history
     booking = UserBookings.query.get(booking_id)
-    
-    # calling helper function if users spot freed/occupied right before this action different flashing logic here
-    status_messages = update_spot_statuses_for_user(user_id)
-    
-    for category, message in status_messages:
-        if "expired" in message:
-            flash("Could not complete the action, your booking had already expired", category)
-            return redirect(url_for('user_home', user_id=session['user_id'], slug=slugify(session['username'])))
-        if "active" in message:
-            flash("Could not cancel booking, your booking had turned active. Use release action to free spot", category)
-            return redirect(url_for('user_home', user_id=session['user_id'], slug=slugify(session['username'])))
-    
-    # incase where booking is already gone through admin session statuse message is empty so will proceed to try to get this booking to history but since not exists in db crash
-    booking = UserBookings.query.get(booking_id)
-    if not booking: 
-        flash("Booking not found or already processed (e.g., expired and moved to history).", "warning")
+
+    if not booking: # --- handling above if case ---
+        flash("Booking not found or already processed (e.g., expired and moved to history).", "info")
+        # flash any other unread messages that might have been generated for this user
+        flash_unread_user_notifications(user.user_id)
         return redirect(url_for('user_home', user_id=session['user_id'], slug=slugify(session['username'])))
-    
-    # determine if it's a future booking being cancelled or an active one being released
+
+    # determine if its a future booking being cancelled or an active one being released
     now = datetime.now()
     is_future_booking = booking.parking_time > now
 
-    # Move booking to history
+    # if the booking is now active but the user is trying to cancel (not release)
+    # this covers the scenario where a future booking turns active right before user tries to cancel
+    if booking.parking_time <= now and booking.leaving_time > now and is_future_booking:
+        flash("Could not cancel booking, your booking has turned active. Use the 'Release' action to free the spot.", "warning")
+        flash_unread_user_notifications(user.user_id) # flash any other unread messages
+        return redirect(url_for('user_home', user_id=session['user_id'], slug=slugify(session['username'])))
+
+    # move booking to history
     history = UserHistory(
         user_id=booking.user_id,
         spot_id=booking.spot_id,
@@ -301,8 +300,8 @@ def release_booking(user_id, slug, user, booking_id):
     )
     db.session.add(history)
 
-    # free the parking spot
-    if booking.spot:
+    # Free the parking spot
+    if booking.spot: # --- check if spot exists ---
         booking.spot.status = 'A' #make spot Physically Available
 
     db.session.delete(booking)
@@ -313,23 +312,25 @@ def release_booking(user_id, slug, user, booking_id):
     else:
         flash("Booking released successfully!", "success")
 
+    # flash any other unread messages for this user from the database
+    flash_unread_user_notifications(user.user_id)
+
     return redirect(url_for('user_home', user_id=session['user_id'], slug=slugify(session['username'])))
 
 
 # -------------------------
-# PROFILE-USER (MODIFIED)
+# PROFILE-USER 
 # -------------------------
 @app.route('/<int:user_id>-<slug>/profile', methods=['GET', 'POST'])
 @login_required
 @user_access_required
-
 @only_user # Ensure this is a non-admin user's profile
 def profile(user_id, slug, user): # 'user' object is injected
 
     # calling helper function if users spot freed/occupied right before this action
-    status_messages = update_spot_statuses_for_user(user_id)
-    for category, message in status_messages:
-        flash("Please check in home, "+ message, category)
+    update_spot_statuses_and_counts() 
+    
+    flash_unread_user_notifications(user.user_id) 
 
     if request.method == "POST":
         action = request.form.get('action')
@@ -351,6 +352,12 @@ def profile(user_id, slug, user): # 'user' object is injected
         elif action == 'update_password':
             old_pass = request.form.get('old_password')
             new_pass = request.form.get('new_password')
+            # --- validate old_pass and new_pass ---
+            if not old_pass or not new_pass:
+                flash("Please enter both old and new passwords.", "danger")
+                db.session.rollback() # rollback any pending changes if validation fails
+                return redirect(url_for('profile', user_id=user.user_id, slug=slugify(user.user_name)))
+
             if check_password_hash(user.pass_wd, old_pass):
                 user.pass_wd = generate_password_hash(new_pass)
                 flash("Password updated successfully", "success")
@@ -359,8 +366,6 @@ def profile(user_id, slug, user): # 'user' object is injected
 
         elif action == 'delete_account':
             # check for any active or future bookings by this user
-            # a user cannot delete if they have any active/future bookings
-            # an active/future booking is one whose leaving_time is in the future
             active_bookings = UserBookings.query.filter(
                 UserBookings.user_id == user.user_id,
                 UserBookings.leaving_time > datetime.now()
@@ -369,20 +374,23 @@ def profile(user_id, slug, user): # 'user' object is injected
                 flash("You have active or future bookings. Please release them before deleting your account.", "warning")
                 return redirect(url_for('profile', user_id=user.user_id, slug=slugify(user.user_name)))
             
-            # Free up any spots that were physically occupied by this user (if any)
-            # This is important if the user's last booking expired but they didn't release it.
+            # free up any spots that were physically occupied by this user (if any)
             occupied_spots_by_user = ParkingSpot.query.join(UserBookings).filter(
                 UserBookings.user_id == user.user_id,
-                ParkingSpot.status == 'O' # Only care about physically occupied spots cause others are already A
+                ParkingSpot.status == 'O'
             ).all()
 
             for spot in occupied_spots_by_user:
-                spot.status = 'A' # Make spots available
+                spot.status = 'A'
 
-            # Delete user's history & bookings (explicitly, even if cascade delete is set up)
+            # delete user's history & bookings (explicitly, even if cascade delete is set up)
             UserBookings.query.filter_by(user_id=user.user_id).delete()
             UserHistory.query.filter_by(user_id=user.user_id).delete()
             
+            # delete user's notifications
+            UserNotification.query.filter_by(user_id=user.user_id).delete()
+
+            # Delete user
             db.session.delete(user)
             db.session.commit()
 
@@ -390,14 +398,14 @@ def profile(user_id, slug, user): # 'user' object is injected
             flash("Your account and all data have been deleted.", "success")
             return redirect(url_for('home'))
 
-        db.session.commit() # Commit changes for update actions
+        db.session.commit() # commit changes
         return redirect(url_for('profile', user_id=user.user_id, slug=slugify(user.user_name)))
 
     return render_template('profile.html', user=user)
 
 
 #--------------------------
-# USER HISTORY
+# USER HISTORY 
 #--------------------------
 @app.route('/<int:user_id>-<slug>/history')
 @login_required
@@ -405,10 +413,9 @@ def profile(user_id, slug, user): # 'user' object is injected
 @only_user
 def user_history(user_id, slug, user): 
 
-    # calling helper function if users spot freed/occupied right before this action
-    status_messages = update_spot_statuses_for_user(user_id)
-    for category, message in status_messages:
-        flash("Please check in home, "+ message, category)
+    update_spot_statuses_and_counts() 
+    
+    flash_unread_user_notifications(user.user_id)
 
     # Fetch full history for this user
     user_history = UserHistory.query.filter_by(user_id=user.user_id).order_by(UserHistory.id.desc()).all()
@@ -422,16 +429,13 @@ def user_history(user_id, slug, user):
 @app.route('/<int:user_id>-<slug>/search-parking', methods=['GET', 'POST'])
 @login_required
 @user_access_required
-
 @only_user
 def search_parking(user_id, slug, user):
     cities = [row[0] for row in db.session.query(ParkingLot.city).distinct().all()]
 
-    # calling helper function if users spot or anyothers spot freed/occupied  right before this action
-    status_messages = update_spot_statuses_for_user(user_id)
-    update_spot_statuses_and_counts()
-    for category, message in status_messages:
-        flash("Please check in home, "+ message, category)
+    update_spot_statuses_and_counts() 
+    
+    flash_unread_user_notifications(user.user_id)
     
     if request.method == 'POST':
         city = request.form.get('city')
@@ -476,11 +480,12 @@ def search_parking(user_id, slug, user):
 @app.route('/<int:user_id>-<slug>/book-spot/<int:lot_id>', methods=['GET', 'POST'])
 @login_required
 @user_access_required
-
 @only_user
 def book_spot(user_id, slug, lot_id, user):
     lot = ParkingLot.query.get(lot_id)
-    #no need for status_update_check here cause overlapping times already checked
+    
+    flash_unread_user_notifications(user.user_id) 
+
     if not lot:
         flash("Parking lot not found!", "danger")
         return redirect(url_for('search_parking', user_id=user.user_id, slug=slugify(user.user_name)))
@@ -488,20 +493,27 @@ def book_spot(user_id, slug, lot_id, user):
     estimated_price = None
     vehicle_no = parking_time = leaving_time = None
     is_preview_mode = False 
-    conflicting_bookings_info = [] # this list will only be populated if "all" spots are conflicting
-    is_any_spot_available_for_period = False # Intitially false cause if available we set it to true
+    conflicting_bookings_info = [] 
+    is_any_spot_available_for_period = False 
 
     if request.method == 'POST':
         vehicle_no = request.form.get('vehicle_no')
         parking_time_str = request.form.get('parking_time')
         leaving_time_str = request.form.get('leaving_time')
-        action = request.form.get('action')  # 'preview' or 'confirm'
+        action = request.form.get('action') 
 
-        parking_time = datetime.fromisoformat(parking_time_str)
-        leaving_time = datetime.fromisoformat(leaving_time_str)
+        try:
+            parking_time = datetime.fromisoformat(parking_time_str)
+            leaving_time = datetime.fromisoformat(leaving_time_str)
+        except ValueError:
+            flash("Invalid date format! Please use YYYY-MM-DDTHH:MM format.", "danger")
+            return render_template('book_spot.html', user=user, lot=lot, 
+                                   vehicle_no=vehicle_no, parking_time=parking_time, leaving_time=leaving_time,
+                                   is_preview_mode=is_preview_mode, conflicting_bookings_info=conflicting_bookings_info,
+                                   is_any_spot_available_for_period=is_any_spot_available_for_period) 
 
         now = datetime.now()
-        limit = now + timedelta(days=10) #booking period must be within next 10 days from now
+        limit = now + timedelta(days=10) 
 
         if parking_time <= now:
             flash("Parking start time must be in the future!", "warning")
@@ -532,20 +544,17 @@ def book_spot(user_id, slug, lot_id, user):
         all_spots_in_lot = ParkingSpot.query.filter_by(lot_id=lot_id).all()
         
         available_spot_ids_for_period = [] 
-        # conflicting_bookings_info is already initialized at the top of the POST block
 
         for spot_candidate in all_spots_in_lot:
-            overlapping_bookings_for_spot = UserBookings.query.filter(  # find overlapping booking for user's given time period
+            overlapping_bookings_for_spot = UserBookings.query.filter( 
                 UserBookings.spot_id == spot_candidate.spot_id,
-                UserBookings.parking_time < leaving_time,  
-                UserBookings.leaving_time > parking_time   
+                UserBookings.parking_time < leaving_time, 
+                UserBookings.leaving_time > parking_time 
             ).all()
 
-            if not overlapping_bookings_for_spot:                        #if no overlapping booking add this spot to available
+            if not overlapping_bookings_for_spot: 
                 available_spot_ids_for_period.append(spot_candidate.spot_id)
             else:
-                # only populate conflicting_bookings_info if this spot is actually unavailable.
-                # we will only display this list if "all" spots are unavailable.
                 for conflict in overlapping_bookings_for_spot:
                     conflicting_bookings_info.append({
                         'spot_id': spot_candidate.spot_id,
@@ -553,23 +562,22 @@ def book_spot(user_id, slug, lot_id, user):
                         'leaving_time': conflict.leaving_time.strftime('%Y-%m-%d %H:%M')
                     })
         
-        # will be false if available_spot_ids_for_period is empty i.e when no spot_canditate was available in timeperiod
         is_any_spot_available_for_period = bool(available_spot_ids_for_period)
         
-        if not is_any_spot_available_for_period: # if (not false) evaluats to true 
+        if not is_any_spot_available_for_period: 
             flash("No spots are available for the selected time period in this parking lot. Please adjust your times.", "danger")
             is_preview_mode = True 
             return render_template('book_spot.html', user=user, lot=lot, estimated_price=estimated_price,
                                    vehicle_no=vehicle_no, parking_time=parking_time, leaving_time=leaving_time,
                                    is_preview_mode=is_preview_mode, conflicting_bookings_info=conflicting_bookings_info,
-                                   is_any_spot_available_for_period=is_any_spot_available_for_period) # <-- Pass new var
+                                   is_any_spot_available_for_period=is_any_spot_available_for_period) 
 
-        if action == 'confirm':  # finalise booking
+        if action == 'confirm': 
             selected_spot_id = available_spot_ids_for_period[0] 
             spot = ParkingSpot.query.get(selected_spot_id) 
 
-            if not spot:    #in case spot deleted by admin while a user was midway confirming
-                flash("The selected spot is no longer available. Please try again or choose different times.", "danger")
+            if not spot: # --- check if spot exists before proceeding ---
+                flash("The selected spot became unavailable just now. Please try again or choose different times.", "danger")
                 return redirect(url_for('book_spot', user_id=user.user_id, slug=slugify(user.user_name), lot_id=lot_id))
 
             recheck_overlapping = UserBookings.query.filter(
@@ -603,21 +611,19 @@ def book_spot(user_id, slug, lot_id, user):
     return render_template('book_spot.html',user=user, lot=lot, estimated_price=estimated_price,
                            vehicle_no=vehicle_no, parking_time=parking_time, leaving_time=leaving_time,
                            is_preview_mode=is_preview_mode, conflicting_bookings_info=conflicting_bookings_info,
-                           is_any_spot_available_for_period=is_any_spot_available_for_period)
+                           is_any_spot_available_for_period=is_any_spot_available_for_period) 
 #-----------------------
-# USER SUMMARY 
+# USER SUMMARY
 #-----------------------
 @app.route('/<int:user_id>-<slug>/summary')
 @login_required
 @user_access_required
-
 @only_user
 def user_summary(user_id, slug, user):
 
-    # calling helper function if users spot freed/occupied right before this action
-    status_messages = update_spot_statuses_and_counts()
-    for category, message in status_messages:
-        flash("Please check in home, "+ message, category)
+    update_spot_statuses_and_counts() 
+    
+    flash_unread_user_notifications(user.user_id)
     
     # Group bookings by parking lot name from history
     data = (
@@ -631,10 +637,10 @@ def user_summary(user_id, slug, user):
         .all()
     )
 
-    # Prepare chart data
+    # prepare chart data
     labels = [row[0] for row in data]
     counts = [row[1] for row in data]
-
+    
     return render_template(
         'user_summary.html',
         user=user,
@@ -646,13 +652,14 @@ def user_summary(user_id, slug, user):
 #---------------------------------------ADMIN ROUTES---------------------------------------
 
 # -------------------------
-# ADMIN DASHBOARD
+# ADMIN DASHBOARD 
 # -------------------------
 @app.route('/admin/dashboard')
 @admin_required
 def admin_dashboard():
-    # --- call the new helper function to update statuses ---
-    update_spot_statuses_and_counts() # we don't flash messages of user to admin here (has a drawback)
+
+    # this will store messages in the db for affected users, but not flash them to admin.
+    update_spot_statuses_and_counts() 
     
     parking_lots = ParkingLot.query.all()
     
@@ -670,7 +677,7 @@ def admin_dashboard():
     return render_template('admin_dashboard.html', lots_with_stats=lots_with_stats)
 
 #--------------------------
-# EDIT PROFILE-ADMIN
+# EDIT PROFILE-admin
 #--------------------------
 @app.route('/admin/profile', methods=['GET', 'POST'])
 @admin_required
@@ -697,6 +704,12 @@ def admin_profile():
         elif action == 'update_password':
             old_pass = request.form.get('old_password')
             new_pass = request.form.get('new_password')
+            # --- validate old_pass and new_pass ---
+            if not old_pass or not new_pass:
+                flash("Please enter both old and new passwords.", "danger")
+                db.session.rollback() 
+                return redirect(url_for('admin_profile'))
+
             if check_password_hash(user.pass_wd, old_pass):
                 user.pass_wd = generate_password_hash(new_pass)
                 flash("Password updated successfully", "success")
@@ -709,7 +722,7 @@ def admin_profile():
     return render_template('admin_profile.html', user=user)
 
 # -------------------------
-# ADD PARKING LOT-ADMIN
+# ADD PARKING LOT-admin 
 # -------------------------
 @app.route('/admin/add_parking_lot', methods=['GET', 'POST'])
 @admin_required
@@ -718,10 +731,18 @@ def add_parking():
         area_type = request.form.get('area_type')
         address = request.form.get('address')
         prime_loc = request.form.get('primelocation_name')
-        price_per_hr = float(request.form.get('price_per_hr'))
+        price_per_hr = request.form.get('price_per_hr') # get as string first
         city = request.form.get('city')
         pincode = request.form.get('pincode')
-        capacity = int(request.form.get('capacity')) 
+        capacity_str = request.form.get('capacity') # get as string first
+
+        # --- validate and convert price_per_hr and capacity ---
+        try:
+            price_per_hr = float(price_per_hr)
+            capacity = int(capacity_str)
+        except (ValueError, TypeError):
+            flash("Price per hour and Capacity must be valid numbers.", "danger")
+            return render_template('add_parking_lot.html')
 
         if capacity < 0:
             flash("Capacity cannot be negative.", "danger")
@@ -731,10 +752,9 @@ def add_parking():
                              price_per_hr=price_per_hr, address=address, pincode=pincode)
 
         db.session.add(new_lot)
-        db.session.flush() # Get lot_id before commit
+        db.session.flush() # Get lotid before commit
 
-        # --- loop to add spots based on capacity ---
-        for _ in range(capacity):
+        for _ in range(capacity): 
             db.session.add(ParkingSpot(lot_id=new_lot.lot_id, status='A')) 
 
         db.session.commit()    
@@ -746,7 +766,7 @@ def add_parking():
 
 
 # -------------------------
-# DELETE PARKING LOT-ADMIN
+# DELETE PARKING LOT-admin 
 # -------------------------
 @app.route('/admin/delete_parking_lot/<int:lot_id>')
 @admin_required
@@ -756,7 +776,7 @@ def delete_parking(lot_id):
         flash("Parking Lot not found!", "danger")
         return redirect(url_for('admin_dashboard'))
     
-    # check for any active (future or current) bookings associated with spots in this lot
+    # check for any active future or current bookings associated with spots in this lot
     active_bookings_in_lot = UserBookings.query.join(ParkingSpot).filter(
         ParkingSpot.lot_id == lot_id,
         UserBookings.leaving_time > datetime.now() 
@@ -766,8 +786,6 @@ def delete_parking(lot_id):
         flash("Cannot delete Parking Lot with active (future or current) bookings! Please ensure all spots are free.", "warning")
         return redirect(url_for('admin_dashboard'))
 
-    # delete all associated parking spots first (cascade="all, delete-orphan" on relationship handles this)
-    # parkingSpot.query.filter_by(lot_id=lot_id).delete()   #this is handled by cascade on lot.spots relationship
     db.session.delete(lot)
     db.session.commit()
     flash("Parking Lot deleted successfully!", "success")
@@ -775,7 +793,7 @@ def delete_parking(lot_id):
 
 
 # -------------------------
-# EDIT PARKING LOT-ADMIN
+# EDIT PARKING LOT-ADMIN 
 # -------------------------
 @app.route('/admin/edit_parking_lot/<int:lot_id>', methods=['GET', 'POST'])
 @admin_required
@@ -789,10 +807,18 @@ def edit_parking(lot_id):
         lot.area_type = request.form.get('area_type')
         lot.address = request.form.get('address')
         lot.primelocation_name = request.form.get('primelocation_name')
-        lot.price_per_hr = float(request.form.get('price_per_hr'))
+        price_per_hr_str = request.form.get('price_per_hr') # Get as string first
         lot.city = request.form.get('city')
         lot.pincode = request.form.get('pincode')
-        # removed: max_spots and occupied_spots from form processing
+        
+        # --- validate and convert price_per_hr ---
+        try:
+            lot.price_per_hr = float(price_per_hr_str)
+        except (ValueError, TypeError):
+            flash("Price per hour must be a valid number.", "danger")
+            db.session.rollback() 
+            return render_template('edit_parking_lot.html', lot=lot)
+
         
         db.session.commit()
         flash("Parking Lot updated successfully!", "success")
@@ -801,7 +827,7 @@ def edit_parking(lot_id):
     return render_template('edit_parking_lot.html', lot=lot)
 
 # ---------------------------
-# VIEW PARKING SPOTS-ADMIN (MODIFIED)
+# VIEW PARKING SPOTS-ADMIN 
 #---------------------------
 @app.route('/admin/parking_spots/<int:lot_id>')
 @admin_required
@@ -885,32 +911,52 @@ def spot_details(spot_id):
     }
 
     # determine if the spot is deletable
-    # a spot is deletable ONLY if it has no current or future bookings.
+    # a spot is deletable only if it has no current or future bookings.
     is_deletable = not current_booking and not future_bookings
     response_data['is_deletable'] = is_deletable 
 
     if current_booking:
         user = current_booking.user
         response_data['current_occupied'] = True
-        response_data['current_booking_details'] = {
-            "user_name": user.user_name,
-            "email": user.email_id,
-            "vehicle_no": current_booking.vehicle_no,
-            "parking_time": current_booking.parking_time.strftime("%d-%m-%Y %H:%M"),
-            "leaving_time": current_booking.leaving_time.strftime("%d-%m-%Y %H:%M"),
-            "parking_cost": str(current_booking.parking_cost)
-        }
+        # check if user exists before accessing attributes
+        if user:
+            response_data['current_booking_details'] = {
+                "user_name": user.user_name,
+                "email": user.email_id,
+                "vehicle_no": current_booking.vehicle_no,
+                "parking_time": current_booking.parking_time.strftime("%d-%m-%Y %H:%M"),
+                "leaving_time": current_booking.leaving_time.strftime("%d-%m-%Y %H:%M"),
+                "parking_cost": str(current_booking.parking_cost)
+            }
+        else:
+            response_data['current_booking_details'] = {
+                "user_name": "Unknown User (ID: {})".format(current_booking.user_id),
+                "email": "N/A",
+                "vehicle_no": current_booking.vehicle_no,
+                "parking_time": current_booking.parking_time.strftime("%d-%m-%Y %H:%M"),
+                "leaving_time": current_booking.leaving_time.strftime("%d-%m-%Y %H:%M"),
+                "parking_cost": str(current_booking.parking_cost)
+            }
+
 
     if future_bookings:
         for fb in future_bookings:
-            response_data['future_bookings_details'].append({
-                "user_name": fb.user.user_name, # Access user via relationship
-                "vehicle_no": fb.vehicle_no,
-                "parking_time": fb.parking_time.strftime("%d-%m-%Y %H:%M"),
-                "leaving_time": fb.leaving_time.strftime("%d-%m-%Y %H:%M")
-            })
+            # check if user exists before accessing attributes
+            if fb.user:
+                response_data['future_bookings_details'].append({
+                    "user_name": fb.user.user_name, 
+                    "vehicle_no": fb.vehicle_no,
+                    "parking_time": fb.parking_time.strftime("%d-%m-%Y %H:%M"),
+                    "leaving_time": fb.leaving_time.strftime("%d-%m-%Y %H:%M")
+                })
+            else:
+                response_data['future_bookings_details'].append({
+                    "user_name": "Unknown User (ID: {})".format(fb.user_id),
+                    "vehicle_no": fb.vehicle_no,
+                    "parking_time": fb.parking_time.strftime("%d-%m-%Y %H:%M"),
+                    "leaving_time": fb.leaving_time.strftime("%d-%m-%Y %H:%M")
+                })
     
-    # returning the structured response_data
     return response_data, 200
 
 
@@ -955,11 +1001,15 @@ def delete_spot(spot_id):
     db.session.delete(spot)
     db.session.commit()
     flash("Spot deleted successfully!", "success")
-    return redirect(url_for('parking_spots', lot_id=lot.lot_id))
+    # NEW: Check if lot exists before redirecting
+    if lot:
+        return redirect(url_for('parking_spots', lot_id=lot.lot_id))
+    else:
+        return redirect(url_for('admin_dashboard'))
 
 
 #-----------------------
-# ADMIN SUMMARY
+# ADMIN SUMMARY 
 #-----------------------
 @app.route('/admin/summary')
 @admin_required
@@ -1016,17 +1066,17 @@ def admin_search():
         if 'submit_user_search' in request.form:
             search_type = 'search_user'
             user_email_id = request.form.get('user_email_id')
-            user_id = request.form.get('user_id')
+            user_id_str = request.form.get('user_id') # Get as string first
 
-            if not user_email_id and not user_id:
+            if not user_email_id and not user_id_str:
                 flash("Please enter either User Email ID or User ID.", "warning")
             else:
                 query = User.query
                 if user_email_id:
                     query = query.filter_by(email_id=user_email_id)
-                if user_id:
+                if user_id_str:
                     try:
-                        user_id = int(user_id)
+                        user_id = int(user_id_str)
                         query = query.filter_by(user_id=user_id)
                     except ValueError:
                         flash("User ID must be a number.", "danger")

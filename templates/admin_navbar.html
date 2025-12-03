@@ -1,7 +1,6 @@
-
-<!-- Navbar -->
 <nav class="navbar custom-navbar">
-    <div class="container-fluid d-flex justify-content-between align-items-center">
+    <!-- <div class="container-fluid d-flex justify-content-between align-items-center"> -->
+        
         <div class="d-flex align-items-center">
             <button class="navbar-toggler me-2" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
                 aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -11,27 +10,22 @@
                 <img src="/static/images/logo.png" alt="ParkAlot Logo" width="30" height="30" class="d-inline-block me-2">
                 <span class="brand-text">ParkAlot</span>
             </a>
-
-            <!-- Welcome Message -->
-            <span class="ms-3 text-white fw-bold">Welcome, Admin!</span>
+            <span class="ms-3 text-white fw-bold d-none d-sm-inline">Welcome, Admin!</span>
         </div>
 
-
-
-        <!-- Profile -->
-        <div class="d-flex gap-2">
+        <div class="d-none d-lg-block">
             <a href="{{ url_for('admin_profile') }}" class="btn btn-outline-secondary text-white">Edit Profile</a>
         </div>
 
-        <!-- Collapsible Menu -->
         <div class="collapse navbar-collapse justify-content-center" id="navbarContent">
-            <div class="d-flex flex-row gap-3">
+            
                 <a class="btn btn-outline-secondary" href="{{ url_for('admin_dashboard') }}">Dashboard</a> 
                 <a class="btn btn-outline-secondary" href="{{ url_for('admin_users') }}">Users</a> 
                 <a class="btn btn-outline-secondary" href="{{ url_for('admin_search')}}">Search</a> 
                 <a class="btn btn-outline-secondary" href="{{ url_for('admin_summary') }}">Summary</a> 
                 <a class="btn btn-outline-secondary" href="{{ url_for('logout') }}">Logout</a>
-            </div>
+                <a href="{{ url_for('admin_profile') }}" class="btn btn-outline-secondary text-white d-lg-none mt-2">Edit Profile</a>
+            
         </div>
-    </div>
+    <!-- </div> -->
 </nav>

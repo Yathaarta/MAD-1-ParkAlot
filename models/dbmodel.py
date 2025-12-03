@@ -2,7 +2,8 @@ from app import app
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import CheckConstraint
 from werkzeug.security import generate_password_hash
-import os          #Using for logic - db.sqlite3 file exists in its path or not
+from datetime import datetime 
+import os
 
 db = SQLAlchemy(app)
 
@@ -17,6 +18,7 @@ class User(db.Model):
 
     bookings = db.relationship('UserBookings', backref='user', cascade="all, delete-orphan", passive_deletes=True)
     history = db.relationship('UserHistory', backref='user', cascade="all, delete-orphan", passive_deletes=True)
+    notifications = db.relationship('UserNotification', backref='user', cascade="all, delete-orphan", passive_deletes=True)
 
 
 class UserBookings(db.Model):
@@ -24,29 +26,26 @@ class UserBookings(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True, unique=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False)
-    # changed to CASCADE delete for consistency with active bookings
-    spot_id = db.Column(db.Integer, db.ForeignKey("parking_spot.spot_id", ondelete="CASCADE"), nullable=False) 
+    spot_id = db.Column(db.Integer, db.ForeignKey("parking_spot.spot_id", ondelete="CASCADE"), nullable=False)
     parking_time = db.Column(db.DateTime, nullable=False)
     leaving_time = db.Column(db.DateTime, nullable=False)
     parking_cost = db.Column(db.Numeric(7, 2), nullable=False)
     vehicle_no = db.Column(db.String(12), nullable=False)
 
     spot = db.relationship('ParkingSpot', back_populates='bookings')
-    # removed the redundant lot-relationship here. Access via booking.spot.lot
+
 
 class UserHistory(db.Model):
     __tablename__ = 'booking_history'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True, unique=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False)
-    # on deleting foriegn key spot id becomes null but doesn't get deleted
-    spot_id = db.Column(db.Integer, db.ForeignKey("parking_spot.spot_id", ondelete="SET NULL"), nullable=True) 
+    spot_id = db.Column(db.Integer, db.ForeignKey("parking_spot.spot_id", ondelete="SET NULL"), nullable=True)
     booking_time = db.Column(db.DateTime, nullable=False)
     leaving_time = db.Column(db.DateTime, nullable=False)
     parking_cost = db.Column(db.Numeric(7, 2), nullable=False)
     vehicle_no = db.Column(db.String(12), nullable=False)
 
-    # using back_populates to link with 'history_records' on ParkingSpot
     spot_obj = db.relationship('ParkingSpot', back_populates='history_records')
 
 
@@ -54,22 +53,19 @@ class ParkingLot(db.Model):
     __tablename__ = 'parkinglot'
 
     lot_id = db.Column(db.Integer, primary_key=True, autoincrement=True, nullable=False)
-    area_type = db.Column(db.String(20), nullable=False)  # 'Open' or 'Covered'
+    area_type = db.Column(db.String(20), nullable=False)
     city = db.Column(db.String(50), nullable=False)
     primelocation_name = db.Column(db.String(100), nullable=False)
     price_per_hr = db.Column(db.Float, nullable=False)
     address = db.Column(db.String(200), unique=True, nullable=False)
     pincode = db.Column(db.String(6), nullable=False)
 
-    # Removed: max_spots and occupied_spots from parkinglot they caused heavy inconsistency 
-
     spots = db.relationship('ParkingSpot', backref='lot', cascade="all, delete-orphan", passive_deletes=False)
 
     __table_args__ = (
         db.CheckConstraint("area_type IN ('Open','Covered','Both')", name='check_area_type'),
     )
-    
-    
+
 
 class ParkingSpot(db.Model):
     __tablename__ = 'parking_spot'
@@ -79,16 +75,30 @@ class ParkingSpot(db.Model):
     status = db.Column(db.String(1), nullable=False) # O-occupied, A-available
 
     bookings = db.relationship('UserBookings', back_populates='spot', passive_deletes=True)
-    history_records = db.relationship('UserHistory', back_populates='spot_obj', passive_deletes=True) 
+    history_records = db.relationship('UserHistory', back_populates='spot_obj', passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint("status IN ('O','A')", name='check_status_occupied'),
     )
 
 
+class UserNotification(db.Model):
+    __tablename__ = 'user_notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.user_id', ondelete="CASCADE"), nullable=False)
+    message_category = db.Column(db.String(50), nullable=False) # e.g., 'info', 'warning', 'success', 'danger'
+    message_text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+
+    def __repr__(self):
+        return f"<UserNotification {self.id} User:{self.user_id} Category:{self.message_category} Read:{self.is_read}>"
+
+
 with app.app_context():
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')            #get dbfile configured path in app config like 'sqlite///filename'
-    db_filename = db_uri.replace('sqlite:///', '')                #remove "sqlite:///" from fetched configured path so just filename
+    db_filename = db_uri.replace('sqlite:///', '')
+    #remove "sqlite:///" from fetched configured path so just filename
     db_file_path = os.path.join(app.instance_path, db_filename)   #join with file name with root folder/instance/filename
     db_existed_bef_create_all = os.path.exists(db_file_path)      #check if a files exists in that path 
     #print(f"DEBUG: checking for DB file at: {db_file_path}")     #to debug, showed correct behaviour therefore commented
@@ -107,7 +117,7 @@ with app.app_context():
         master_admin = User(user_id=1, email_id=admin_email, pass_wd=passhash, user_name=admin_username, is_admin=True)
         db.session.add(master_admin)
         db.session.commit()
-        print(f"Master Admin user '{admin_username}' ({admin_email}) created successfully with ID 1.") 
+        print(f"Master Admin user '{admin_username}' ({admin_email}) created successfully with ID 1.")
     else:
         print(f"Master Admin user '{admin_email}' already exists. Skipping creation.")
 
@@ -139,18 +149,18 @@ with app.app_context():
 
         for lot_data in dummy_parking_lots_data:
             new_lot = ParkingLot(
-                area_type=lot_data["area_type"], 
+                area_type=lot_data["area_type"],
                 city=lot_data["city"],
-                primelocation_name=lot_data["primelocation_name"], 
-                price_per_hr=lot_data["price_per_hr"], 
-                address=lot_data["address"], 
+                primelocation_name=lot_data["primelocation_name"],
+                price_per_hr=lot_data["price_per_hr"],
+                address=lot_data["address"],
                 pincode=lot_data["pincode"])
             
             db.session.add(new_lot)
             db.session.flush() # get lot_id before commit
 
-            # add 10 spots for each lot 
-            for _ in range(10): 
+            # add 10 spots for each lot
+            for _ in range(10):
                 db.session.add(ParkingSpot(lot_id=new_lot.lot_id, status='A'))
             
         db.session.commit()

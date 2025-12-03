@@ -19,6 +19,7 @@
         color: white; 
         border-color: #5c1884; 
     }
+    
     </style>
 
 {% endblock %}
@@ -60,45 +61,47 @@
                 <div class="card-header bg-warning text-dark">Current Bookings</div>
                 <div class="card-body">
                     {% if current_bookings %}
-                    <table class="table table-bordered">
-                        <thead>
-                            <tr>
-                                <th>Booking ID</th>
-                                <th>Spot ID</th>
-                                <th>Location</th>
-                                <th>Vehicle No</th>
-                                <th>Start Time</th>
-                                <th>Parking Expiry</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for booking in current_bookings %}
-                            <tr>
-                                <td>{{ booking.id }}</td>
-                                <td>{{ booking.spot.spot_id }}</td>
-                                <td>{{ booking.spot.lot.address }}</td>
-                                <td>{{ booking.vehicle_no }}</td>
-                                <td>{{ booking.parking_time.strftime('%d-%m-%Y %H:%M') }}</td>
-                                <td>{{ booking.leaving_time.strftime('%d-%m-%Y %H:%M') }}</td>
-                                <td>
-                                    <form action="{{ url_for('release_booking', user_id=user.user_id, slug=slugify(user.user_name), booking_id=booking.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to release this booking?');">
-                                        {# now from the route #}
-                                        {% if booking.parking_time <= now and booking.leaving_time > now %}
-                                            {# if booking is active show release button#}
-                                            <button type="submit" class="btn btn-danger btn-sm">Release</button>
-                                        {% elif booking.parking_time > now %}
-                                            {# if booking is of future show cancel button #}
-                                            <button type="submit" class="btn btn-cancel btn-sm">Cancel</button>
-                                        {% else %}
-                                            <span class="badge bg-secondary">Expired</span>
-                                        {% endif %}
-                                    </form>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Booking ID</th>
+                                    <th>Spot ID</th>
+                                    <th>Location</th>
+                                    <th>Vehicle No</th>
+                                    <th>Start Time</th>
+                                    <th>Parking Expiry</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for booking in current_bookings %}
+                                <tr>
+                                    <td>{{ booking.id }}</td>
+                                    <td>{{ booking.spot.spot_id }}</td>
+                                    <td>{{ booking.spot.lot.address }}</td>
+                                    <td>{{ booking.vehicle_no }}</td>
+                                    <td>{{ booking.parking_time.strftime('%d-%m-%Y %H:%M') }}</td>
+                                    <td>{{ booking.leaving_time.strftime('%d-%m-%Y %H:%M') }}</td>
+                                    <td>
+                                        <form action="{{ url_for('release_booking', user_id=user.user_id, slug=slugify(user.user_name), booking_id=booking.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to release this booking?');">
+                                            {# now from the route #}
+                                            {% if booking.parking_time <= now and booking.leaving_time > now %}
+                                                {# if booking is active show release button#}
+                                                <button type="submit" class="btn btn-danger btn-sm">Release</button>
+                                            {% elif booking.parking_time > now %}
+                                                {# if booking is of future show cancel button #}
+                                                <button type="submit" class="btn btn-cancel btn-sm">Cancel</button>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Expired</span>
+                                            {% endif %}
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                     {% else %}
                         <p class="text-muted text-center">No current bookings.</p>
                     {% endif %}
@@ -110,43 +113,45 @@
                 <div class="card-header bg-primary text-white">Recent Parking History</div>
                 <div class="card-body">
                     {% if recent_history %}
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Spot ID</th>
-                                <th>Location</th>
-                                <th>Vehicle No</th>
-                                <th>Start DateTime</th>
-                                <th>Expiry DateTime</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in recent_history %}
-                            <tr>
-                                <td>{{ record.id }}</td>
-                                <td>
-                                    {% if record.spot_obj and record.spot_obj.spot_id %}
-                                        {{ record.spot_obj.spot_id }}
-                                    {% else %}
-                                        Deleted Spot
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if record.spot_obj and record.spot_obj.lot %}
-                                        {{ record.spot_obj.lot.address }}
-                                    {% else %}
-                                        Deleted Lot
-                                    {% endif %}
-                                </td>
-                                <td>{{ record.vehicle_no }}</td>
-                                <td>{{ record.booking_time.strftime('%d-%m-%Y %H:%M') }}</td>
-                                <td>{{ record.leaving_time.strftime('%d-%m-%Y %H:%M') }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <div class="text-center">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Spot ID</th>
+                                    <th>Location</th>
+                                    <th>Vehicle No</th>
+                                    <th>Start DateTime</th>
+                                    <th>Expiry DateTime</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in recent_history %}
+                                <tr>
+                                    <td>{{ record.id }}</td>
+                                    <td>
+                                        {% if record.spot_obj and record.spot_obj.spot_id %}
+                                            {{ record.spot_obj.spot_id }}
+                                        {% else %}
+                                            Deleted Spot
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if record.spot_obj and record.spot_obj.lot %}
+                                            {{ record.spot_obj.lot.address }}
+                                        {% else %}
+                                            Deleted Lot
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ record.vehicle_no }}</td>
+                                    <td>{{ record.booking_time.strftime('%d-%m-%Y %H:%M') }}</td>
+                                    <td>{{ record.leaving_time.strftime('%d-%m-%Y %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-3">
                         <a href="{{ url_for('user_history', user_id=user.user_id, slug=slugify(user.user_name)) }}" class="btn btn-link">See Full History</a>
                     </div>
                     {% else %}

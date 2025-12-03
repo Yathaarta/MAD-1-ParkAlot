@@ -3,6 +3,7 @@ body {
     background-color: #0dbe71;
 }
 
+/* --- Navbar Styles --- */
 .custom-navbar {
     background-color: #0b2c3d;
     padding: 0.5rem 1rem;
@@ -20,7 +21,6 @@ body {
     padding: 0.3rem;
     opacity: 1 !important;
     visibility: visible !important;
-    border: none;
     background: transparent;
 }
 
@@ -37,30 +37,35 @@ body {
 .custom-navbar .navbar-nav {
     flex-direction: row;
 }
+
 .custom-navbar .navbar-collapse {
     background-color: #09464f;
     padding: 10px;
     border-radius: 6px;
-    
+    z-index: 1000; /* Ensure it floats above content */
 }
+
 .navbar-collapse .btn {
     color: yellow;
     font-weight: 400;
 }
 
-/* rest section */
+/* --- Main Content (Hero) --- */
 .main-content {
-  background-image: url('/static/images/bg_img.jpg'); 
-  background-size: cover;
-  background-position: center;
-  border-radius: 5px; 
-  height: 85vh; 
-  margin: 35px;
-  padding: 40px;
-  box-shadow: black 0px 0px 20px;
+    background-image: url('/static/images/bg_img.jpg'); 
+    background-size: cover;
+    background-position: center;
+    border-radius: 5px; 
+    
+    min-height: 85vh; 
+    height: auto;
+    
+    margin: 35px;
+    padding: 40px;
+    box-shadow: black 0px 0px 20px;
 }
 
-
+/* --- Parking Spots Grid --- */
 .spot-container {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 10px;
@@ -69,12 +74,15 @@ body {
     max-width: 1000px;
     box-shadow: 0 8px 16px rgba(0,0,0,0.3);
 }
+
 .spots-grid {
     display: grid;
+    /* Auto-fill ensures spots wrap nicely */
     grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
     gap: 15px;
     justify-content: center;
 }
+
 .spot {
     width: 60px;
     height: 60px;
@@ -86,17 +94,21 @@ body {
     font-size: 14px;
     cursor: pointer;
     color: #fff;
-}
-.spot.available {
-    background-color: #28a745; /* green for available */
-}
-.spot.occupied {
-    background-color: #dc3545; /* red for occupied */
-}
-.spot:hover {
-    transform: scale(1.08);
     transition: transform 0.2s ease-in-out;
 }
+
+.spot.available {
+    background-color: #28a745; /* green */
+}
+
+.spot.occupied {
+    background-color: #dc3545; /* red */
+}
+
+.spot:hover {
+    transform: scale(1.08);
+}
+
 .details-panel {
     background: #fff;
     border-radius: 10px;
@@ -104,6 +116,7 @@ body {
     box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     height: 100%;
 }
+
 .instructions {
     margin-top: 15px;
     font-size: 14px;
@@ -111,14 +124,55 @@ body {
     font-style: italic;
     text-align: center;
 }
+
 h3 {
     text-align: center;
     font-weight: bold;
-    color: #222;
     background: rgba(0, 0, 0, 0.6);
     color: #fff;
     padding: 6px 12px;
     display: inline-block;
     border-radius: 6px;
     margin-bottom: 15px;
+}
+
+
+/* --- MOBILE OPTIMIZATION --- */
+@media (max-width: 768px) {
+    
+    body {
+        font-size: 14px;
+    }
+
+    /* 2. Navbar & Button Adjustments */
+    .custom-navbar .navbar-brand .brand-text {
+        font-size: 1.1rem;
+    }
+    .custom-navbar .btn {
+        font-size: 0.9rem;
+        width: 100%;       
+        text-align: left;  
+        margin-bottom: 5px;
+    }
+
+    .main-content {
+        margin: 15px;   
+        padding: 20px;  
+        min-height: auto; 
+    }
+
+    .spots-grid {
+        gap: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    }
+    .spot {
+        width: 45px;
+        height: 45px;
+        font-size: 12px;
+    }
+
+    h3 {
+        font-size: 1.2rem;
+        padding: 4px 10px;
+    }
 }

@@ -1,9 +1,26 @@
 {% extends "base_layout.html" %}
 {% block title %}Admin Summary - ParkAlot{% endblock %}
+
 {% block head_extra %}
 {{ super() }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="/static/css/navbar2.css">
+<style>
+    /* --- CHART CONTAINER STYLES --- */
+    .chart-wrapper {
+        position: relative;
+        width: 100%;
+        /* default Height for Mobile */
+        height: 400px; 
+    }
+
+    @media (min-width: 992px) {
+        .chart-wrapper {
+            /* height for laptop/desktop */
+            height: 70vh; 
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -11,42 +28,68 @@
 
 <div class="hero-section">
     <div class="container">
-        <h3 class="text-center mb-4 custom-heading">Platform Summary</h3>
+        <div class="text-box"><h3 class="text-center mb-4 custom-heading">Platform Summary</h3></div>
 
-        <!-- Stats Overview -->
         <div class="row text-center mb-4">
-            <div class="col-md-3"><div class="card p-3 shadow"><h6>Total Users</h6><h4>{{ total_users }}</h4></div></div>
-            <div class="col-md-3"><div class="card p-3 shadow"><h6>Parking Lots</h6><h4>{{ total_lots }}</h4></div></div>
-            <div class="col-md-3"><div class="card p-3 shadow"><h6>Active Bookings</h6><h4>{{ total_bookings }}</h4></div></div> {# total_bookings is now active/future bookings #}
-            <div class="col-md-3"><div class="card p-3 shadow"><h6>Booking History</h6><h4>{{ total_history }}</h4></div></div>
+            <div class="col-6 col-md-3 mb-3"><div class="card p-3 shadow h-100"><h6>Total Users</h6><h4>{{ total_users }}</h4></div></div>
+            <div class="col-6 col-md-3 mb-3"><div class="card p-3 shadow h-100"><h6>Parking Lots</h6><h4>{{ total_lots }}</h4></div></div>
+            <div class="col-6 col-md-3 mb-3"><div class="card p-3 shadow h-100"><h6>Active Bookings</h6><h4>{{ total_bookings }}</h4></div></div>
+            <div class="col-6 col-md-3 mb-3"><div class="card p-3 shadow h-100"><h6>Booking History</h6><h4>{{ total_history }}</h4></div></div>
         </div>
 
-        <!-- Chart -->
         <div class="card shadow-sm p-4">
-            <h5 class="mb-3 text-center">Top Booked Parking Lots (From History)</h5> {# Clarified title #}
-            <canvas id="adminChart"></canvas>
+            <h5 class="mb-4 text-center">Top Booked Parking Lots (History)</h5>
+            
+            <div class="chart-wrapper">
+                <canvas id="adminChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-const ctx = document.getElementById('adminChart').getContext('2d');
-new Chart(ctx, {
-    type: 'bar',
-    data: {
-        labels: {{ labels | safe }},
-        datasets: [{
-            label: 'Number of Bookings',
-            data: {{ counts | safe }},
-            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        scales: { y: { beginAtZero: true } }
-    }
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('adminChart').getContext('2d');
+    
+    // check if the screen width is less than 768px (Mobile)
+    const isMobile = window.innerWidth < 768;
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ labels | safe }},
+            datasets: [{
+                label: 'Number of Bookings',
+                data: {{ counts | safe }},
+                backgroundColor: 'rgba(54, 162, 235, 0.7)', 
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: isMobile ? 'x' : 'x', 
+            
+            responsive: true,
+            
+            // set this to false so it obeys our CSS height (70vh/500px)
+            maintainAspectRatio: false, 
+            
+            plugins: {
+                legend: { display: false } // hides legend if not needed to save space
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        maxRotation: isMobile ? 60 : 0,
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
 });
 </script>
 {% endblock %}

@@ -4,6 +4,22 @@
 {{ super() }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="/static/css/navbar2.css">
+<style>
+    /* --- CHART WRAPPER (Responsive Height) --- */
+    .chart-wrapper {
+        position: relative;
+        width: 100%;
+        /* Mobile Height */
+        height: 400px; 
+    }
+
+    @media (min-width: 992px) {
+        .chart-wrapper {
+            /* Laptop Height */
+            height: 70vh; 
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -15,29 +31,53 @@
 
         <div class="card shadow-sm p-4 mb-4">
             <h5 class="mb-3 text-center">Most Frequent Parking Lots</h5>
-            <canvas id="userChart"></canvas>
+            
+            <div class="chart-wrapper">
+                <canvas id="userChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-const ctx = document.getElementById('userChart').getContext('2d');
-new Chart(ctx, {
-    type: 'bar',
-    data: {
-        labels: {{ labels | safe }},
-        datasets: [{
-            label: 'Number of Bookings',
-            data: {{ counts | safe }},
-            backgroundColor: 'rgba(75, 192, 192, 0.7)',
-            borderColor: 'rgba(75, 192, 192, 1)',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        scales: { y: { beginAtZero: true } }
-    }
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('userChart').getContext('2d');
+
+    // DETECT MOBILE: accurate check for phone screens
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ labels | safe }},
+            datasets: [{
+                label: 'Number of Bookings',
+                data: {{ counts | safe }},
+                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: isMobile ? 'x' : 'x', 
+            
+            responsive: true,
+            
+            maintainAspectRatio: false, 
+            
+            plugins: {
+                legend: { display: false } // hides legend if not needed to save space
+            },
+            scales: { 
+                y: { beginAtZero: true },
+                x: {
+                    ticks: {
+                        maxRotation: isMobile ? 60 : 0,
+                    }
+                }
+            }
+        }
+    });
 });
 </script>
 {% endblock %}

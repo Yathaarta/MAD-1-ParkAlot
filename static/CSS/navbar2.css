@@ -3,7 +3,6 @@ body {
     background-color: #0dbe71;
 }
 
-
 .custom-navbar {
     background-color: #0b2c3d;
     padding: 0.5rem 1rem;
@@ -40,7 +39,10 @@ body {
     background-color: #09464f;
     border-radius: 6px;
     padding: 10px;
+    /* ensuring it sits on top of content when opened on mobile */
+    z-index: 1000; 
 }
+/* On mobile, stacking the buttons vertically and adding space */
 
 .navbar-collapse .btn {
     color: rgb(255, 255, 0);
@@ -64,21 +66,28 @@ body {
 }
 
 
+/* Fix Hero Section */
 .hero-section {
-  background-image: url('/static/images/bg_img.jpg'); 
-  background-size: cover;
-  background-position: center;
-  border-radius: 5px; 
-  height: 85vh; 
-  margin: 35px;
-  padding: 40px;
-  box-shadow: black 0px 0px 20px;
+    background-image: url('/static/images/bg_img.jpg');
+    background-size: cover;
+    background-position: center;
+    border-radius: 5px;
+    /* Remove fixed height, use min-height instead */
+    min-height: 85vh; 
+    height: auto; 
+    
+    /* Adjust margins for mobile */
+    margin: 35px;
+    padding: 40px;
+
+    box-shadow: black 0px 0px 20px;
 }
 
 .card {
     border-radius: 10px;
     outline: black solid 1px;
     background: rgba(255, 255, 255, 0.9);
+    max-width: 100%; /* Ensure cards never exceed screen width */
 }
 
 
@@ -88,4 +97,97 @@ body {
     display: inline-block;
     padding: 6px 12px;
     border-radius: 6px;
+}
+
+.table-container {
+    max-height: 500px;
+    overflow-y: auto; /* Vertical scroll */
+    overflow-x: auto; /* Horizontal scroll - CRITICAL for mobile */
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    outline: black solid 1px;
+    
+    /* Ensure the container itself fits within the screen */
+    max-width: 100%;
+    display: block;
+}
+
+@media (max-width: 991px) {
+    .custom-navbar .navbar-collapse .d-flex.flex-row {
+        flex-direction: column !important; /* Force vertical stack */
+        width: 100%;
+    }
+    
+    .custom-navbar .navbar-collapse .btn {
+        width: 100%; /* Make buttons full width for easier tapping */
+        text-align: left;
+        margin-bottom: 5px;
+    }
+    
+}
+
+/* Mobile adjustments for hero section */
+@media (max-width: 768px) {
+/* 1. Shrink general text */
+    body {
+        font-size: 14px; 
+    }
+    
+    /* 2. Shrink Headings */
+    h3, .custom-heading {
+        font-size: 1.2rem !important; /* Force smaller size */
+        padding: 4px 8px;
+    }
+    
+    /* 3. Shrink Navbar Text */
+    .custom-navbar .navbar-brand .brand-text {
+        font-size: 1.1rem;
+    }
+    .custom-navbar span.fw-bold {
+        font-size: 0.9rem; /* Welcome message size */
+    }
+
+    /* 4. Compact Buttons */
+    .btn {
+        font-size: 0.95rem;      /* Smaller text in buttons */
+        padding: 0.35rem 0.5rem; /* Less padding inside buttons */
+        margin: 2px;
+    }
+
+    /* 5. Compact Tables (Crucial for your dashboard) */
+    .table th, 
+    .table td {
+        font-size: 12px;    /* Smaller table text */
+        padding: 0.3rem;    /* Less whitespace in cells */
+        white-space: nowrap; /* Prevents text from wrapping awkwardly in tiny columns */
+    }
+    .table-container {
+        margin: 5px;
+    }
+    h3,.custom-heading {
+        width: 90% !important;
+        font-size: 1.4rem !important;
+    }    
+    /* Allow 'Address' or 'City' to wrap if they are too long, overriding the nowrap above */
+    .table td:nth-child(3), /* City column */
+    .table td:nth-child(5) { /* Address column */
+        white-space: normal;
+        min-width: 100px;
+    }
+
+    .hero-section {
+        margin: 10px 5px !important; /* Smaller margin on phones */
+        padding: 7px 0px !important; /* Smaller padding */
+        min-height: auto !important; /* Allow content to dictate height */
+        border-radius: 10px !important;
+    }
+
+    .custom-heading {
+        font-size: 1rem !important; /* Smaller font for headings */
+    }
+    .text-box {
+        text-align: center;
+    }
 }

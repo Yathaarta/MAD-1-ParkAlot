@@ -9,27 +9,45 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/navbar2.css">
-
+    <style>
+        @media (max-width: 991px) {
+            .custom-heading {
+                flex-direction: column;
+                text-align: center;
+                width: 95% !important;
+            }
+            .card {
+                max-width: 100% !important;
+                width: 94% !important;
+                padding: 15px 15px !important;
+            }
+        }
+        
+    </style>
 {% endblock %}
 
 {% block content %}
     {% include "public_home_nav.html" %}
 
     <!-- Hero -->
-    <div class="hero-section d-flex justify-content-between align-items-center p-4">
-        <!-- Left text -->
-        <div class="custom-heading">
+    <div class="hero-section d-flex flex-wrap justify-content-center justify-content-lg-between align-items-center p-4">
+        
+        <div class="custom-heading mb-4 col-12 col-lg-6">
             <h1 class="fw-bold">Booking Parking gets easy with ParkAlot</h1>
-            <h5>Book your parking spot in seconds with ease.</h5><br><br>
-            We hope to get our services to every city in India.<br>
-            It will not be possible without your support,<br>
-            So, please register and help us grow.<br><br><br>
-            Visit contact us page for any queries or suggestions.<br>
-            Visit about us page to know more about us.
+            <br>
+            <h5>Book your parking spot in seconds with ease.</h5><br>
+            <p> We hope to get our services to every city in India.<br>
+                It will not be possible without your support,<br>
+                So, please register and help us grow.
+            </p>
+            <br>
+            <small>
+                Visit contact us page for any queries or suggestions.<br>
+                Visit about us page to know more about us.
+            </small>
         </div>
 
-        <!-- bootstrap form -->
-        <div class="card p-4" style="width: 415px; height: 450px;">
+        <div class="card p-4 shadow-lg" style="width: 100%; max-width: 415px; height: auto;">
             <h5 class="mb-3">Find and Book a Parking Spot</h5>
             <form method="POST" action="{{ url_for('home') }}">
                 <div class="mb-3">
@@ -72,3 +90,4 @@
         </div>
     </div>
 {% endblock %}
+                     
