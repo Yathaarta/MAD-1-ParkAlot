@@ -1,6 +1,9 @@
 # Vehicle-Parking-App - ParkAlot
-Project for May-Term 2025 for MAD-1 course in diploma level in IIT-M BS Data Science Degree
+
 [![Live Demo](https://img.shields.io/badge/demo-online-green.svg?style=for-the-badge&logo=appveyor)](http://parkalot.pythonanywhere.com/)
+
+Project for May-Term 2025 for MAD-1 course in diploma level in IIT-M BS Data Science Degree
+
 
 ## Project Description
 
@@ -118,7 +121,9 @@ Below is a list of completed milestones for this project:
 * ER Diagram for Database model: https://drive.google.com/file/d/1qj3zjXXeYz34Xhmb28jjNe1-7p5vgZsi/view?usp=sharing
 * Project Demostration Video: https://drive.google.com/file/d/1fvCD8g0ysJ_ebdIGmdNOivHzyuYIzCYZ/view?usp=sharing
 
+
 [![Live Demo](https://img.shields.io/badge/demo-online-green.svg?style=for-the-badge&logo=appveyor)](http://parkalot.pythonanywhere.com/)
+
 
 ## Screenshots
 
